@@ -39,9 +39,19 @@ cd /opt
 git clone https://github.com/PojP/main_utility_server.git
 cd main_utility_server
 
-# 5. Скопировать и заполнить конфиг
+# 5. Создать .env (выберите способ)
+
+# Способ A: Вручную
 cp .env.example .env
 nano .env  # Отредактировать переменные окружения
+
+# Способ B: Из переменных окружения (безопаснее для автоматизации)
+export TELEGRAM_TOKEN="your_token"
+export POSTGRES_PASSWORD="your_password"
+export TG_API_ID="1710401"
+export TG_API_HASH="your_hash"
+export TG_PHONE="+7999..."
+bash scripts/setup-env.sh
 
 # 6. Запустить сервисы
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
@@ -77,6 +87,39 @@ sudo bash scripts/install-docker.sh
 После установки проверьте:
 ```bash
 docker compose version     # или docker-compose version
+```
+
+---
+
+## 🔐 Управление secrets (API ключи, пароли)
+
+**⚠️ НИКОГДА не коммитьте .env с реальными значениями!**
+
+Подробная документация: [docs/SECRETS.md](docs/SECRETS.md)
+
+### Для GitHub Actions (CI/CD):
+
+1. Перейти в **Settings → Secrets and variables → Actions**
+2. Добавить каждый secret отдельно:
+   ```
+   TELEGRAM_TOKEN = 8127789812:AAEALs2O8hrMHGil...
+   POSTGRES_PASSWORD = your_password
+   TG_API_ID = 1710401
+   ...
+   ```
+
+### Для локального развертывания:
+
+```bash
+# Установить переменные окружения
+export TELEGRAM_TOKEN="your_token"
+export POSTGRES_PASSWORD="your_password"
+export TG_API_ID="1710401"
+export TG_API_HASH="your_hash"
+export TG_PHONE="+79991234567"
+
+# Создать .env автоматически
+bash scripts/setup-env.sh
 ```
 
 ---
