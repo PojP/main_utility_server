@@ -1,0 +1,112 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Production Server
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            set -e
+
+            echo "🚀 Deploying RSS Reader..."
+
+            cd /opt/main_utility_server
+
+            # Получить обновления
+            git pull origin main
+
+            # Создать .env из GitHub Secrets
+            cat > .env << 'EOF'
+            # === Bot ===
+            TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
+            NOTIFY_CHAT_ID=${{ secrets.NOTIFY_CHAT_ID }}
+
+            # === RSS Parser ===
+            PARSE_INTERVAL_MIN=${{ secrets.PARSE_INTERVAL_MIN || 15 }}
+
+            # === Userbot ===
+            TG_API_ID=${{ secrets.TG_API_ID }}
+            TG_API_HASH=${{ secrets.TG_API_HASH }}
+            TG_PHONE=${{ secrets.TG_PHONE }}
+            TG_2FA_PASSWORD=${{ secrets.TG_2FA_PASSWORD }}
+
+            # === PostgreSQL ===
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+
+            # === MinIO ===
+            S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }}
+            S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }}
+            S3_PUBLIC_URL=${{ secrets.S3_PUBLIC_URL || 'http://localhost:9000' }}
+
+            # === API ===
+            API_PORT=${{ secrets.API_PORT || 8080 }}
+
+            # === AI ===
+            OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+            OPENROUTER_MODEL=${{ secrets.OPENROUTER_MODEL || 'qwen/qwen-2.5-72b-instruct:free' }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            GEMINI_MODEL=${{ secrets.GEMINI_MODEL || 'gemini-2.0-flash' }}
+
+            # === Obsidian ===
+            OBSIDIAN_VAULT_HOST_PATH=${{ secrets.OBSIDIAN_VAULT_HOST_PATH }}
+            EOF
+
+            chmod 600 .env
+
+            # Обновить Docker образы и перезапустить
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+            # Проверить статус
+            echo ""
+            echo "📊 Service Status:"
+            docker compose ps
+
+            # Ждать пока API будет готов
+            echo ""
+            echo "⏳ Waiting for API to be ready..."
+            for i in {1..30}; do
+              if curl -s http://localhost:8080/api/news?limit=1 > /dev/null 2>&1; then
+                echo "✅ API is ready!"
+                break
+              fi
+              echo "   Attempt $i/30..."
+              sleep 2
+            done
+
+            echo ""
+            echo "✅ Deployment completed successfully!"
+
+      - name: Notify deployment status
+        if: always()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            cd /opt/main_utility_server
+
+            if docker compose ps | grep -q "Up"; then
+              echo "✅ Deployment successful at $(date)" >> /var/log/rss-reader-deploy.log
+            else
+              echo "❌ Deployment failed at $(date)" >> /var/log/rss-reader-deploy.log
+              exit 1
+            fi

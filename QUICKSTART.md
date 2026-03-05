@@ -314,4 +314,55 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 ---
 
+## 🤖 Автоматическое развертывание через GitHub Actions
+
+Если хотите автоматический деплой на сервер через GitHub Actions:
+
+### 1. Добавить GitHub Secrets
+
+```bash
+# С помощью интерактивного скрипта
+bash scripts/add-github-secrets.sh
+
+# Или вручную в GitHub:
+# Settings → Secrets and variables → Actions → New secret
+```
+
+### 2. Добавить SSH ключи для деплоя
+
+```bash
+# На вашем ПК (если ключа нет):
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
+
+# Скопировать приватный ключ
+cat ~/.ssh/id_rsa
+
+# На сервере добавить публичный ключ
+echo "ssh-rsa AAAA..." >> ~/.ssh/authorized_keys
+```
+
+Затем добавить в GitHub secrets:
+```
+SERVER_HOST = your_server.com
+SERVER_USER = root
+SERVER_SSH_KEY = (содержимое ~/.ssh/id_rsa)
+```
+
+### 3. При каждом push в main
+
+```bash
+git push origin main
+```
+
+GitHub автоматически:
+- ✅ Получит ваш код
+- ✅ Создаст .env из secrets
+- ✅ Подключится к серверу по SSH
+- ✅ Обновит Docker образы
+- ✅ Перезапустит приложение
+
+**Подробнее:** [docs/GITHUB-SECRETS-SETUP.md](docs/GITHUB-SECRETS-SETUP.md)
+
+---
+
 **Готово! 🎉** Ваш сервер должен быть запущен и работать.
