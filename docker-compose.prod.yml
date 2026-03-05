@@ -1,0 +1,84 @@
+# Production Docker Compose Override
+# Используется как: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  postgres:
+    # Используем готовый образ вместо локальной сборки
+    image: postgres:16-alpine
+    restart: always
+    mem_limit: 1g
+    memswap_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rssreader"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  minio:
+    image: minio/minio:latest
+    restart: always
+    mem_limit: 512m
+    memswap_limit: 512m
+    # Не экспонируем порты наружу (только внутри Docker сети)
+    expose:
+      - "9000"
+      - "9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  bot:
+    # Используем готовый образ из GHCR
+    image: ghcr.io/pojp/rss-reader:main-bot
+    pull_policy: always
+    restart: always
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: "0.5"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  parser:
+    image: ghcr.io/pojp/rss-reader:main-parser
+    pull_policy: always
+    restart: always
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  userbot:
+    image: ghcr.io/pojp/rss-reader:main-userbot
+    pull_policy: always
+    restart: always
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: "0.5"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  api:
+    image: ghcr.io/pojp/rss-reader:main-api
+    pull_policy: always
+    restart: always
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: "0.5"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Не экспонируем напрямую, используем Nginx reverse proxy
+    expose:
+      - "8080"
