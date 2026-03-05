@@ -5,7 +5,7 @@ This project uses GitHub Actions for continuous integration and deployment.
 ## Workflows
 
 ### CI (`.github/workflows/ci.yml`)
-
+ 
 Runs on every push to `main`/`master` and pull requests.
 
 **Jobs:**
