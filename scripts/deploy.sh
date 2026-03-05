@@ -17,11 +17,40 @@ DEPLOY_DIR="/opt/rss-reader"
 GITHUB_REPO="https://github.com/PojP/main_utility_server.git"
 
 echo "📦 Шаг 1: Установка Docker..."
-if ! command -v docker &> /dev/null; then
+
+# Функция для установки Docker на Debian/Ubuntu
+install_docker() {
     apt update
-    apt install -y docker.io docker-compose-plugin git
+    apt install -y ca-certificates curl gnupg lsb-release git
+
+    # Добавить Docker репозиторий
+    mkdir -p /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    # Установить Docker
+    apt update
+    apt install -y docker-ce docker-ce-cli containerd.io
+
+    # Попытаться установить docker-compose-plugin (V2)
+    apt install -y docker-compose-plugin 2>/dev/null || true
+
+    # Если V2 не установлен, установить V1
+    if ! docker compose version &>/dev/null 2>&1 && ! command -v docker-compose &>/dev/null; then
+        apt install -y docker-compose
+    fi
+}
+
+if ! command -v docker &> /dev/null; then
+    echo "   Установка Docker..."
+    install_docker
     usermod -aG docker $SUDO_USER
     echo "✅ Docker установлен"
+elif ! docker compose version &>/dev/null 2>&1 && ! command -v docker-compose &>/dev/null; then
+    echo "   Docker есть, но Compose отсутствует. Установка..."
+    apt update
+    apt install -y docker-compose-plugin 2>/dev/null || apt install -y docker-compose
+    echo "✅ Docker Compose установлен"
 else
     echo "✅ Docker уже установлен"
 fi
@@ -61,8 +90,16 @@ fi
 
 echo ""
 echo "🐳 Шаг 4: Запуск контейнеров..."
-docker compose pull
-docker compose up -d
+
+# Определить какую команду использовать
+if docker compose version &>/dev/null 2>&1; then
+    DC_CMD="docker compose"
+else
+    DC_CMD="docker-compose"
+fi
+
+$DC_CMD -f docker-compose.yml -f docker-compose.prod.yml pull
+$DC_CMD -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 # Ждем пока API не будет доступен
 echo ""
@@ -81,8 +118,8 @@ echo "🤖 Шаг 5: Настройка Userbot (требуется интера
 read -p "Нужно ли настроить userbot? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    docker compose run -it userbot
-    docker compose up userbot -d
+    $DC_CMD run -it userbot
+    $DC_CMD up userbot -d
     echo "✅ Userbot настроен"
 fi
 
@@ -90,7 +127,7 @@ echo ""
 echo "✅ === Установка завершена ==="
 echo ""
 echo "📊 Статус сервисов:"
-docker compose ps
+$DC_CMD ps
 echo ""
 echo "🌐 API доступен по адресу: http://localhost:8080"
 echo ""

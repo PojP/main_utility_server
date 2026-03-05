@@ -57,6 +57,30 @@ docker compose up userbot -d
 
 ---
 
+## ⚙️ Если Docker Compose не устанавливается
+
+На Debian 12 и некоторых других системах `docker-compose-plugin` может быть недоступен. Используйте универсальный скрипт:
+
+```bash
+# Автоматическая установка Docker и Compose (V1 или V2)
+curl -fsSL https://raw.githubusercontent.com/PojP/main_utility_server/main/scripts/install-docker.sh | sudo bash
+
+# Или локально
+sudo bash scripts/install-docker.sh
+```
+
+Скрипт:
+- ✅ Поддерживает Debian, Ubuntu, Fedora, CentOS
+- ✅ Автоматически выбирает V2 или V1
+- ✅ Обрабатывает зависимости и репозитории
+
+После установки проверьте:
+```bash
+docker compose version     # или docker-compose version
+```
+
+---
+
 ## 📋 Требуемые параметры в .env
 
 ```env
@@ -179,8 +203,9 @@ sudo ufw deny 9000/tcp   # MinIO
 ```bash
 cd /opt/main_utility_server
 
-# Статус сервисов
-docker compose ps
+# Статус сервисов (работает V1 и V2)
+docker compose ps              # V2
+docker-compose ps              # V1
 
 # Логи конкретного сервиса
 docker compose logs -f api      # API
@@ -196,6 +221,8 @@ docker compose down
 # Остановить и удалить все данные (!)
 docker compose down -v
 ```
+
+**Примечание:** Команды `docker compose` (V2) и `docker-compose` (V1) полностью совместимы. Используйте то, что установлено на вашей системе.
 
 ---
 
