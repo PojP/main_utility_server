@@ -40,7 +40,7 @@ jobs:
           CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o ./bin/${{ matrix.service }} ./cmd/${{ matrix.service }}
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.service }}-binary
           path: ./bin/${{ matrix.service }}
