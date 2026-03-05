@@ -1,0 +1,56 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  # ─── CI: build + vet all services ────────────────────────────────────────────
+  ci:
+    name: Build & Vet
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build all services
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+  # ─── CD: deploy to VPS via SSH ───────────────────────────────────────────────
+  deploy:
+    name: Deploy
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            git pull --ff-only
+
+            # Rebuild only changed services; skip userbot to avoid interrupting
+            # the interactive session (redeploy it manually when needed).
+            docker compose up -d --build --remove-orphans --no-deps \
+              bot parser api
+
+            # Remove dangling images to free disk space
+            docker image prune -f
