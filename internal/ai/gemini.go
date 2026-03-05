@@ -384,22 +384,36 @@ func (g *GeminiClient) uploadFile(ctx context.Context, data []byte, filename, mi
 
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
-	mw.SetBoundary(boundary)
+	if err := mw.SetBoundary(boundary); err != nil {
+		return "", fmt.Errorf("set boundary: %w", err)
+	}
 
 	// Part 1: JSON metadata
 	metaH := make(textproto.MIMEHeader)
 	metaH.Set("Content-Type", "application/json")
-	metaPart, _ := mw.CreatePart(metaH)
-	json.NewEncoder(metaPart).Encode(map[string]interface{}{
+	metaPart, err := mw.CreatePart(metaH)
+	if err != nil {
+		return "", fmt.Errorf("create metadata part: %w", err)
+	}
+	if err := json.NewEncoder(metaPart).Encode(map[string]interface{}{
 		"file": map[string]string{"display_name": filename},
-	})
+	}); err != nil {
+		return "", fmt.Errorf("encode metadata: %w", err)
+	}
 
 	// Part 2: file bytes
 	fileH := make(textproto.MIMEHeader)
 	fileH.Set("Content-Type", mimeType)
-	filePart, _ := mw.CreatePart(fileH)
-	filePart.Write(data)
-	mw.Close()
+	filePart, err := mw.CreatePart(fileH)
+	if err != nil {
+		return "", fmt.Errorf("create file part: %w", err)
+	}
+	if _, err := filePart.Write(data); err != nil {
+		return "", fmt.Errorf("write file data: %w", err)
+	}
+	if err := mw.Close(); err != nil {
+		return "", fmt.Errorf("close multipart: %w", err)
+	}
 
 	uploadURL := fmt.Sprintf("%s/files?key=%s", geminiUploadURL, g.apiKey)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, &buf)

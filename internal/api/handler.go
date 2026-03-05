@@ -112,7 +112,9 @@ func (h *Handler) getNews(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("api: encode response: %v", err)
+	}
 }
 
 // GET /api/news/{id} — full article JSON.
@@ -122,7 +124,9 @@ func (h *Handler) getArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(toArticleJSON(*article))
+	if err := json.NewEncoder(w).Encode(toArticleJSON(*article)); err != nil {
+		log.Printf("api: encode article: %v", err)
+	}
 }
 
 // GET /api/news/{id}/summary — lightweight summary: ai_title, summary, tags.
@@ -139,13 +143,15 @@ func (h *Handler) getArticleSummary(w http.ResponseWriter, r *http.Request) {
 		Tags    []string `json:"tags,omitempty"`
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(summaryResp{
+	if err := json.NewEncoder(w).Encode(summaryResp{
 		ID:      article.ID,
 		Title:   article.Title,
 		AITitle: article.AITitle,
 		Summary: article.Summary,
 		Tags:    article.Tags,
-	})
+	}); err != nil {
+		log.Printf("api: encode summary: %v", err)
+	}
 }
 
 // POST /api/news/{id}/rate — rate an article.
@@ -178,10 +184,12 @@ func (h *Handler) rateArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]int{
+	if err := json.NewEncoder(w).Encode(map[string]int{
 		"likes":    article.Likes,
 		"dislikes": article.Dislikes,
-	})
+	}); err != nil {
+		log.Printf("api: encode ratings: %v", err)
+	}
 }
 
 // POST /api/news/{id}/save — analyze the article with Gemini and save to Obsidian.
@@ -217,7 +225,9 @@ func (h *Handler) saveArticle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"file": shortPath})
+	if err := json.NewEncoder(w).Encode(map[string]string{"file": shortPath}); err != nil {
+		log.Printf("api: encode file path: %v", err)
+	}
 }
 
 func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
