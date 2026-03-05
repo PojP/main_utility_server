@@ -64,7 +64,8 @@ if [ ! -d "$DEPLOY_DIR" ]; then
     echo "✅ Репозиторий клонирован в $DEPLOY_DIR"
 else
     cd $DEPLOY_DIR
-    git pull origin main
+    git fetch origin main
+    git reset --hard origin/main
     echo "✅ Репозиторий обновлен"
 fi
 

@@ -29,7 +29,8 @@ jobs:
             cd /opt/main_utility_server
 
             # Получить обновления
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             # Создать .env из GitHub Secrets
             cat > .env << 'EOF'
