@@ -81,14 +81,20 @@ jobs:
 
             chmod 600 .env
 
-            # Обновить Docker образы и перезапустить
+            # Остановить старые контейнеры
+            echo ""
+            echo "🛑 Останавливаю старые контейнеры..."
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml down || true
+
+            # Обновить Docker образы
             echo ""
             echo "📦 Обновляю Docker образы..."
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
 
+            # Запустить новые контейнеры
             echo ""
             echo "🚀 Запускаю контейнеры..."
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
             # Проверить статус
             echo ""
@@ -106,6 +112,11 @@ jobs:
               echo "   Попытка $i/30..."
               sleep 2
             done
+
+            # Очистить старые образы
+            echo ""
+            echo "🧹 Очищаю старые образы..."
+            docker image prune -f
 
             echo ""
             echo "✅ Деплой успешно завершен!"
