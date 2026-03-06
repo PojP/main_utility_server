@@ -47,10 +47,10 @@ jobs:
             cat > .env << 'EOF'
             # === Bot ===
             TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
-            NOTIFY_CHAT_ID=${{ secrets.NOTIFY_CHAT_ID }}
+            NOTIFY_CHAT_ID=${{ vars.NOTIFY_CHAT_ID }}
 
             # === RSS Parser ===
-            PARSE_INTERVAL_MIN=${{ secrets.PARSE_INTERVAL_MIN || 15 }}
+            PARSE_INTERVAL_MIN=${{ vars.PARSE_INTERVAL_MIN || 15 }}
 
             # === Userbot ===
             TG_API_ID=${{ secrets.TG_API_ID }}
@@ -67,16 +67,16 @@ jobs:
             S3_PUBLIC_URL=${{ secrets.S3_PUBLIC_URL || 'http://localhost:9000' }}
 
             # === API ===
-            API_PORT=${{ secrets.API_PORT || 8080 }}
+            API_PORT=${{ vars.API_PORT || 8080 }}
 
             # === AI ===
             OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
-            OPENROUTER_MODEL=${{ secrets.OPENROUTER_MODEL || 'qwen/qwen-2.5-72b-instruct:free' }}
+            OPENROUTER_MODEL=${{ vars.OPENROUTER_MODEL || 'qwen/qwen-2.5-72b-instruct:free' }}
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-            GEMINI_MODEL=${{ secrets.GEMINI_MODEL || 'gemini-2.0-flash' }}
+            GEMINI_MODEL=${{ vars.GEMINI_MODEL || 'gemini-2.0-flash' }}
 
             # === Obsidian ===
-            OBSIDIAN_VAULT_HOST_PATH=${{ secrets.OBSIDIAN_VAULT_HOST_PATH }}
+            OBSIDIAN_VAULT_HOST_PATH=${{ vars.OBSIDIAN_VAULT_HOST_PATH }}
             EOF
 
             chmod 600 .env
