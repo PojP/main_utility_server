@@ -16,47 +16,57 @@ jobs:
         run: |
           cat > .env << 'EOF'
           # === Bot ===
-          TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
-          NOTIFY_CHAT_ID=${{ secrets.NOTIFY_CHAT_ID }}
+          TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN || 'NOT_SET' }}
+          NOTIFY_CHAT_ID=${{ secrets.NOTIFY_CHAT_ID || 'NOT_SET' }}
 
           # === RSS Parser ===
-          PARSE_INTERVAL_MIN=${{ secrets.PARSE_INTERVAL_MIN || 15 }}
+          PARSE_INTERVAL_MIN=${{ secrets.PARSE_INTERVAL_MIN || '15' }}
 
           # === Userbot ===
-          TG_API_ID=${{ secrets.TG_API_ID }}
-          TG_API_HASH=${{ secrets.TG_API_HASH }}
-          TG_PHONE=${{ secrets.TG_PHONE }}
-          TG_2FA_PASSWORD=${{ secrets.TG_2FA_PASSWORD }}
+          TG_API_ID=${{ secrets.TG_API_ID || 'NOT_SET' }}
+          TG_API_HASH=${{ secrets.TG_API_HASH || 'NOT_SET' }}
+          TG_PHONE=${{ secrets.TG_PHONE || 'NOT_SET' }}
+          TG_2FA_PASSWORD=${{ secrets.TG_2FA_PASSWORD || 'NOT_SET' }}
 
           # === PostgreSQL ===
-          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD || 'NOT_SET' }}
 
           # === MinIO ===
-          S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }}
-          S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }}
+          S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY || 'minioadmin' }}
+          S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY || 'minioadmin' }}
           S3_PUBLIC_URL=${{ secrets.S3_PUBLIC_URL || 'http://localhost:9000' }}
 
           # === API ===
-          API_PORT=${{ secrets.API_PORT || 8080 }}
+          API_PORT=${{ secrets.API_PORT || '8080' }}
 
           # === AI ===
-          OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY || 'NOT_SET' }}
           OPENROUTER_MODEL=${{ secrets.OPENROUTER_MODEL || 'qwen/qwen-2.5-72b-instruct:free' }}
-          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY || 'NOT_SET' }}
           GEMINI_MODEL=${{ secrets.GEMINI_MODEL || 'gemini-2.0-flash' }}
 
           # === Obsidian ===
-          OBSIDIAN_VAULT_HOST_PATH=${{ secrets.OBSIDIAN_VAULT_HOST_PATH }}
+          OBSIDIAN_VAULT_HOST_PATH=${{ secrets.OBSIDIAN_VAULT_HOST_PATH || 'NOT_SET' }}
           EOF
+
+          # Убедиться что файл создан
+          ls -lah .env
+          echo "---"
+          head -5 .env
 
       - name: Verify .env was created
         run: |
           if [ ! -f .env ]; then
-            echo "ERROR: .env file not created"
+            echo "❌ ERROR: .env file not created"
             exit 1
           fi
           echo "✅ .env file created successfully"
           echo "File size: $(wc -c < .env) bytes"
+          echo ""
+          echo "⚠️  Values with 'NOT_SET' need to be filled in GitHub Secrets:"
+          echo "Settings → Secrets and variables → Actions"
+          echo ""
+          grep "NOT_SET" .env || echo "✅ All critical secrets are set!"
 
       - name: Upload .env as artifact
         uses: actions/upload-artifact@v4
