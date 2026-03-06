@@ -14,6 +14,8 @@ jobs:
   build-and-push:
     name: Build and Push
     runs-on: ubuntu-latest
+    environment:
+      name: .env
     strategy:
       matrix:
         service: [bot, parser, userbot, api]

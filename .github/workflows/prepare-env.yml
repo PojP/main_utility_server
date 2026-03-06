@@ -9,6 +9,8 @@ jobs:
   generate-env:
     name: Generate .env from Secrets
     runs-on: ubuntu-latest
+    environment:
+      name: .env
     steps:
       - uses: actions/checkout@v4
 
