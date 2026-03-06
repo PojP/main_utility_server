@@ -28,7 +28,16 @@ jobs:
 
             echo "🚀 Deploying RSS Reader..."
 
+            # Создать папку если её нет
+            mkdir -p /opt/main_utility_server
             cd /opt/main_utility_server
+
+            # Инициализировать git репо если нужно
+            if [ ! -d .git ]; then
+              echo "📂 Инициализирую новый репо..."
+              git init
+              git remote add origin https://github.com/PojP/main_utility_server.git
+            fi
 
             # Получить обновления
             git fetch origin main
@@ -73,28 +82,33 @@ jobs:
             chmod 600 .env
 
             # Обновить Docker образы и перезапустить
+            echo ""
+            echo "📦 Обновляю Docker образы..."
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+            echo ""
+            echo "🚀 Запускаю контейнеры..."
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
 
             # Проверить статус
             echo ""
-            echo "📊 Service Status:"
-            docker compose ps
+            echo "📊 Статус сервисов:"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 
             # Ждать пока API будет готов
             echo ""
-            echo "⏳ Waiting for API to be ready..."
+            echo "⏳ Ожидание готовности API..."
             for i in {1..30}; do
               if curl -s http://localhost:8080/api/news?limit=1 > /dev/null 2>&1; then
-                echo "✅ API is ready!"
+                echo "✅ API готов!"
                 break
               fi
-              echo "   Attempt $i/30..."
+              echo "   Попытка $i/30..."
               sleep 2
             done
 
             echo ""
-            echo "✅ Deployment completed successfully!"
+            echo "✅ Деплой успешно завершен!"
 
       - name: Notify deployment status
         if: always()
