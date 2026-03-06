@@ -558,11 +558,9 @@ func removeTagsSection(content string) string {
 	return strings.TrimRight(strings.Join(result, "\n"), "\n")
 }
 
-// slugify converts a title to a filesystem-safe ASCII-like slug.
+// slugify converts a title to a filesystem-safe slug, preserving Cyrillic characters.
 func slugify(title string) string {
 	title = strings.ToLower(title)
-	// Transliterate common Cyrillic letters
-	title = cyrillic(title)
 	var sb strings.Builder
 	for _, r := range title {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
@@ -585,17 +583,6 @@ func slugify(title string) string {
 		slug = "note"
 	}
 	return slug
-}
-
-func cyrillic(s string) string {
-	r := strings.NewReplacer(
-		"а", "a", "б", "b", "в", "v", "г", "g", "д", "d", "е", "e", "ё", "yo",
-		"ж", "zh", "з", "z", "и", "i", "й", "y", "к", "k", "л", "l", "м", "m",
-		"н", "n", "о", "o", "п", "p", "р", "r", "с", "s", "т", "t", "у", "u",
-		"ф", "f", "х", "kh", "ц", "ts", "ч", "ch", "ш", "sh", "щ", "sch",
-		"ъ", "", "ы", "y", "ь", "", "э", "e", "ю", "yu", "я", "ya",
-	)
-	return r.Replace(s)
 }
 
 // SaveArticleToObsidian analyzes a news article with Gemini and saves the structured

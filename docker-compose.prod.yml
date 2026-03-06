@@ -37,6 +37,16 @@ services:
       retries: 5
       start_period: 30s
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: always
+    mem_limit: 512m
+    memswap_limit: 512m
+    # Не экспонируем порты наружу
+    ports: []
+    expose:
+      - "6333"
+
   bot:
     # Используем готовый образ из GHCR
     image: ghcr.io/pojp/rss-reader:main-bot
@@ -59,6 +69,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      qdrant:
+        condition: service_started
 
   userbot:
     image: ghcr.io/pojp/rss-reader:main-userbot
@@ -72,6 +84,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+      qdrant:
+        condition: service_started
 
   api:
     image: ghcr.io/pojp/rss-reader:main-api
@@ -83,6 +97,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      qdrant:
+        condition: service_started
     # Не экспонируем напрямую, используем Nginx reverse proxy
     expose:
       - "8080"

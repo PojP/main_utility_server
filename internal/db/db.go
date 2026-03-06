@@ -328,6 +328,40 @@ func (db *DB) ArticlesSince(ctx context.Context, sinceID int64, limit int) ([]Ar
 	return db.GetArticles(ctx, ArticleFilter{SinceID: sinceID, Limit: limit})
 }
 
+// GetArticlesByIDs returns articles matching the given IDs, preserving the input order.
+func (db *DB) GetArticlesByIDs(ctx context.Context, ids []int64) ([]Article, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := db.pool.Query(ctx,
+		`SELECT a.id, a.source_id, a.external_id, a.title, a.content, a.url, a.image_url,
+		        a.pub_date, a.created_at, a.summary, a.ai_title, a.tags, a.likes, a.dislikes,
+		        COALESCE(s.name, s.url) as source_name
+		 FROM articles a
+		 LEFT JOIN sources s ON s.id = a.source_id
+		 WHERE a.id = ANY($1)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	articles, err := scanArticles(rows)
+	if err != nil {
+		return nil, err
+	}
+	// Reorder to match input IDs order
+	byID := make(map[int64]Article, len(articles))
+	for _, a := range articles {
+		byID[a.ID] = a
+	}
+	result := make([]Article, 0, len(ids))
+	for _, id := range ids {
+		if a, ok := byID[id]; ok {
+			result = append(result, a)
+		}
+	}
+	return result, nil
+}
+
 type pgxRows interface {
 	Next() bool
 	Scan(dest ...any) error

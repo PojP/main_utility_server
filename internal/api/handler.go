@@ -12,15 +12,19 @@ import (
 
 	"rss-reader/internal/ai"
 	"rss-reader/internal/db"
+	"rss-reader/internal/embeddings"
+	"rss-reader/internal/qdrant"
 )
 
 type Handler struct {
-	db     *db.DB
-	gemini *ai.GeminiClient // nil if Gemini not configured
+	db       *db.DB
+	gemini   *ai.GeminiClient    // nil if Gemini not configured
+	embedder *embeddings.Client  // nil if embeddings not configured
+	qdrant   *qdrant.Client      // nil if Qdrant not configured
 }
 
-func NewHandler(database *db.DB, gemini *ai.GeminiClient) *Handler {
-	return &Handler{db: database, gemini: gemini}
+func NewHandler(database *db.DB, gemini *ai.GeminiClient, embedder *embeddings.Client, qd *qdrant.Client) *Handler {
+	return &Handler{db: database, gemini: gemini, embedder: embedder, qdrant: qd}
 }
 
 type articleJSON struct {
@@ -49,6 +53,7 @@ func (h *Handler) NewMux() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", h.health)
 	mux.HandleFunc("GET /api/news", h.getNews)
+	mux.HandleFunc("GET /api/news/recommended", h.getRecommended)
 	mux.HandleFunc("GET /api/news/{id}", h.getArticle)
 	mux.HandleFunc("GET /api/news/{id}/summary", h.getArticleSummary)
 	mux.HandleFunc("POST /api/news/{id}/rate", h.rateArticle)
@@ -171,10 +176,16 @@ func (h *Handler) rateArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.db.RateArticle(r.Context(), id, body.Vote == "good"); err != nil {
+	isGood := body.Vote == "good"
+	if err := h.db.RateArticle(r.Context(), id, isGood); err != nil {
 		log.Printf("api: rateArticle %d: %v", id, err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+
+	// Embed and store in Qdrant for recommendations
+	if h.embedder != nil && h.qdrant != nil {
+		go h.embedAndRate(id, isGood)
 	}
 
 	// Return updated counts
@@ -189,6 +200,124 @@ func (h *Handler) rateArticle(w http.ResponseWriter, r *http.Request) {
 		"dislikes": article.Dislikes,
 	}); err != nil {
 		log.Printf("api: encode ratings: %v", err)
+	}
+}
+
+// embedAndRate ensures the article is embedded in Qdrant and sets the vote payload.
+func (h *Handler) embedAndRate(articleID int64, isGood bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	vote := 0
+	if isGood {
+		vote = 1
+	}
+
+	// Check if point already exists in Qdrant
+	exists, err := h.qdrant.PointExists(ctx, articleID)
+	if err != nil {
+		log.Printf("api: qdrant check %d: %v", articleID, err)
+	}
+
+	if exists {
+		// Just update the vote payload
+		if err := h.qdrant.SetPayload(ctx, articleID, map[string]any{"vote": vote}); err != nil {
+			log.Printf("api: qdrant set vote %d: %v", articleID, err)
+		}
+		return
+	}
+
+	// Need to embed first
+	article, err := h.db.GetArticle(ctx, articleID)
+	if err != nil || article == nil {
+		log.Printf("api: get article %d for embedding: %v", articleID, err)
+		return
+	}
+
+	text := article.Title + " " + article.Content
+	vector, err := h.embedder.Embed(ctx, text)
+	if err != nil {
+		log.Printf("api: embed article %d: %v", articleID, err)
+		return
+	}
+
+	payload := map[string]any{
+		"article_id": articleID,
+		"vote":       vote,
+	}
+	if err := h.qdrant.Upsert(ctx, articleID, vector, payload); err != nil {
+		log.Printf("api: qdrant upsert %d: %v", articleID, err)
+	}
+}
+
+// GET /api/news/recommended?limit=20
+// Returns articles recommended based on user's like/dislike history.
+func (h *Handler) getRecommended(w http.ResponseWriter, r *http.Request) {
+	if h.qdrant == nil || h.embedder == nil {
+		http.Error(w, `{"error":"recommendation system not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	limit := queryInt(r, "limit", 20)
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	ctx := r.Context()
+
+	// Get liked and disliked article IDs from Qdrant
+	likedIDs, err := h.qdrant.GetVotedIDs(ctx, 1)
+	if err != nil {
+		log.Printf("api: get liked IDs: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if len(likedIDs) == 0 {
+		// No likes yet — return empty result
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(newsResponse{Articles: []articleJSON{}, HasMore: false})
+		return
+	}
+
+	dislikedIDs, err := h.qdrant.GetVotedIDs(ctx, 0)
+	if err != nil {
+		log.Printf("api: get disliked IDs: %v", err)
+		// Continue without negatives
+		dislikedIDs = nil
+	}
+
+	recommendedIDs, _, err := h.qdrant.Recommend(ctx, likedIDs, dislikedIDs, limit)
+	if err != nil {
+		log.Printf("api: recommend: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if len(recommendedIDs) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(newsResponse{Articles: []articleJSON{}, HasMore: false})
+		return
+	}
+
+	// Fetch full articles from DB
+	articles, err := h.db.GetArticlesByIDs(ctx, recommendedIDs)
+	if err != nil {
+		log.Printf("api: get articles by IDs: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	resp := newsResponse{
+		Articles: make([]articleJSON, 0, len(articles)),
+		HasMore:  false,
+	}
+	for _, a := range articles {
+		resp.Articles = append(resp.Articles, toArticleJSON(a))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("api: encode recommended: %v", err)
 	}
 }
 

@@ -27,6 +27,14 @@ services:
     volumes:
       - miniodata:/data
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    volumes:
+      - qdrantdata:/qdrant/storage
+    ports:
+      - "6333:6333"
+
   bot:
     build:
       context: .
@@ -57,6 +65,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      qdrant:
+        condition: service_started
     environment:
       DATABASE_URL: postgres://rssreader:${POSTGRES_PASSWORD:-rssreader}@postgres:5432/rssreader?sslmode=disable
       TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
@@ -64,6 +74,8 @@ services:
       PARSE_INTERVAL_MIN: ${PARSE_INTERVAL_MIN:-15}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-qwen/qwen-2.5-72b-instruct:free}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      QDRANT_URL: http://qdrant:6333
 
   userbot:
     build:
@@ -75,6 +87,8 @@ services:
       postgres:
         condition: service_healthy
       minio:
+        condition: service_started
+      qdrant:
         condition: service_started
     environment:
       DATABASE_URL: postgres://rssreader:${POSTGRES_PASSWORD:-rssreader}@postgres:5432/rssreader?sslmode=disable
@@ -93,6 +107,8 @@ services:
       S3_PUBLIC_URL: ${S3_PUBLIC_URL:-http://localhost:9000}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-qwen/qwen-2.5-72b-instruct:free}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      QDRANT_URL: http://qdrant:6333
     volumes:
       - userbotdata:/data
     stdin_open: true
@@ -107,13 +123,20 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      qdrant:
+        condition: service_started
     ports:
       - "${API_PORT:-8080}:8080"
     environment:
       DATABASE_URL: postgres://rssreader:${POSTGRES_PASSWORD:-rssreader}@postgres:5432/rssreader?sslmode=disable
       API_ADDR: ":8080"
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      OBSIDIAN_VAULT_PATH: ""
+      QDRANT_URL: http://qdrant:6333
 
 volumes:
   pgdata:
   miniodata:
   userbotdata:
+  qdrantdata:

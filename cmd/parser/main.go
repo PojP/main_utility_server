@@ -11,8 +11,10 @@ import (
 
 	"rss-reader/internal/ai"
 	"rss-reader/internal/db"
+	"rss-reader/internal/embeddings"
 	"rss-reader/internal/parser"
 	"rss-reader/internal/processor"
+	"rss-reader/internal/qdrant"
 )
 
 func main() {
@@ -37,7 +39,26 @@ func main() {
 		log.Println("parser: OPENROUTER_API_KEY not set — AI enrichment disabled")
 	}
 
-	proc := processor.New(database, orClient)
+	// Qdrant + embeddings for indexing articles (optional)
+	var embedClient *embeddings.Client
+	var qdrantClient *qdrant.Client
+	qdrantURL := os.Getenv("QDRANT_URL")
+	geminiKey := os.Getenv("GEMINI_API_KEY")
+	if qdrantURL != "" && geminiKey != "" {
+		embedClient = embeddings.New(geminiKey, getenv("EMBEDDING_MODEL", ""))
+		qdrantClient = qdrant.New(qdrantURL, embeddings.VectorSize)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := qdrantClient.EnsureCollection(ctx); err != nil {
+			log.Printf("parser: qdrant init: %v (embedding disabled)", err)
+			qdrantClient = nil
+			embedClient = nil
+		} else {
+			log.Printf("parser: Qdrant enabled (%s)", qdrantURL)
+		}
+		cancel()
+	}
+
+	proc := processor.New(database, orClient, embedClient, qdrantClient)
 	p := parser.New(database, proc, time.Duration(intervalMin)*time.Minute, botToken, notifyChat)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

@@ -77,6 +77,9 @@ jobs:
 
             # === Obsidian ===
             OBSIDIAN_VAULT_HOST_PATH=${{ vars.OBSIDIAN_VAULT_HOST_PATH }}
+
+            # === Qdrant (auto-configured via Docker network) ===
+            QDRANT_URL=http://qdrant:6333
             EOF
 
             chmod 600 .env

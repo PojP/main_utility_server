@@ -8,6 +8,8 @@ import (
 
 	"rss-reader/internal/ai"
 	"rss-reader/internal/db"
+	"rss-reader/internal/embeddings"
+	"rss-reader/internal/qdrant"
 	"rss-reader/internal/similarity"
 )
 
@@ -25,12 +27,21 @@ const recentLimit = 2000 // how many recent articles to scan for similarity
 // Processor deduplicates articles and enriches them with AI-generated titles/summaries/tags.
 type Processor struct {
 	db         *db.DB
-	openrouter *ai.OpenRouterClient // nil if not configured
+	openrouter *ai.OpenRouterClient   // nil if not configured
+	embedder   *embeddings.Client     // nil if not configured
+	qdrant     *qdrant.Client         // nil if not configured
+	enrichSem  chan struct{}           // limits concurrent enrich goroutines
 }
 
-// New creates a Processor. openrouter may be nil (AI enrichment disabled).
-func New(database *db.DB, openrouter *ai.OpenRouterClient) *Processor {
-	return &Processor{db: database, openrouter: openrouter}
+// New creates a Processor. openrouter/embedder/qdrant may be nil.
+func New(database *db.DB, openrouter *ai.OpenRouterClient, embedder *embeddings.Client, qd *qdrant.Client) *Processor {
+	return &Processor{
+		db:         database,
+		openrouter: openrouter,
+		embedder:   embedder,
+		qdrant:     qd,
+		enrichSem:  make(chan struct{}, 3), // max 3 concurrent enrich requests
+	}
 }
 
 // Process saves an article after checking for semantic duplicates.
@@ -93,6 +104,7 @@ func (p *Processor) Process(
 	}
 
 	p.enrichAsync(id, title, content)
+	p.embedAsync(id, title, content)
 	return id, ResultNew, nil
 }
 
@@ -103,7 +115,11 @@ func (p *Processor) enrichAsync(articleID int64, title, content string) {
 		return
 	}
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		// Limit concurrency so we don't flood OpenRouter and timeout
+		p.enrichSem <- struct{}{}
+		defer func() { <-p.enrichSem }()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
 		aiTitle, summary, tags, err := p.openrouter.EnrichArticle(ctx, title, content)
@@ -116,6 +132,31 @@ func (p *Processor) enrichAsync(articleID int64, title, content string) {
 		}
 		if err := p.db.UpdateArticleAI(ctx, articleID, aiTitle, summary, tags); err != nil {
 			log.Printf("processor: save AI fields for article %d: %v", articleID, err)
+		}
+	}()
+}
+
+// embedAsync generates an embedding and stores it in Qdrant.
+func (p *Processor) embedAsync(articleID int64, title, content string) {
+	if p.embedder == nil || p.qdrant == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		text := title + " " + content
+		vector, err := p.embedder.Embed(ctx, text)
+		if err != nil {
+			log.Printf("processor: embed article %d: %v", articleID, err)
+			return
+		}
+
+		payload := map[string]any{
+			"article_id": articleID,
+		}
+		if err := p.qdrant.Upsert(ctx, articleID, vector, payload); err != nil {
+			log.Printf("processor: qdrant upsert article %d: %v", articleID, err)
 		}
 	}()
 }

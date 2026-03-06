@@ -49,6 +49,9 @@ jobs:
 
           # === Obsidian ===
           OBSIDIAN_VAULT_HOST_PATH=${{ secrets.OBSIDIAN_VAULT_HOST_PATH || 'NOT_SET' }}
+
+          # === Qdrant ===
+          QDRANT_URL=http://qdrant:6333
           EOF
 
           # Убедиться что файл создан

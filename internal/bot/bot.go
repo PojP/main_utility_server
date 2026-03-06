@@ -189,7 +189,7 @@ func (b *Bot) processVideoJob(job videoJob) {
 			b.send(job.chatID, fmt.Sprintf("Ошибка анализа: %v", err), false)
 			return
 		}
-		b.saveAndReply(job.chatID, result, "", "video")
+		b.saveAndReply(job.chatID, result, job.url, "video")
 	}
 }
 
@@ -391,11 +391,15 @@ func (b *Bot) handleVideo(msg *tgbotapi.Message) {
 	if filename == "" {
 		filename = "video.mp4"
 	}
-	b.setPending(videoJob{kind: jobTelegramVideo, chatID: msg.Chat.ID, fileID: msg.Video.FileID, filename: filename})
+	job := videoJob{kind: jobTelegramVideo, chatID: msg.Chat.ID, fileID: msg.Video.FileID, filename: filename}
+	job.url = extractForwardURL(msg)
+	b.setPending(job)
 }
 
 func (b *Bot) handleVideoDocument(msg *tgbotapi.Message) {
-	b.setPending(videoJob{kind: jobTelegramVideo, chatID: msg.Chat.ID, fileID: msg.Document.FileID, filename: msg.Document.FileName})
+	job := videoJob{kind: jobTelegramVideo, chatID: msg.Chat.ID, fileID: msg.Document.FileID, filename: msg.Document.FileName}
+	job.url = extractForwardURL(msg)
+	b.setPending(job)
 }
 
 func (b *Bot) handleYouTubeURL(chatID int64, url string) {
@@ -578,6 +582,18 @@ func (b *Bot) downloadTelegramFile(fileID string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
+// extractForwardURL builds a t.me link if the message was forwarded from a channel.
+func extractForwardURL(msg *tgbotapi.Message) string {
+	if msg.ForwardFromChat != nil && msg.ForwardFromChat.Type == "channel" {
+		username := msg.ForwardFromChat.UserName
+		if username != "" {
+			return fmt.Sprintf("https://t.me/%s/%d", username, msg.ForwardFromMessageID)
+		}
+		return fmt.Sprintf("https://t.me/c/%d/%d", msg.ForwardFromChat.ID, msg.ForwardFromMessageID)
+	}
+	return ""
+}
+
 func isVideoDocument(doc *tgbotapi.Document) bool {
 	if doc == nil {
 		return false
@@ -667,6 +683,13 @@ func normalizeChannelRef(raw string) string {
 			break
 		}
 	}
+	// Strip query params and trailing slashes
+	if idx := strings.IndexAny(raw, "?#"); idx >= 0 {
+		raw = raw[:idx]
+	}
+	raw = strings.TrimRight(raw, "/")
+	// Handle s/ prefix (t.me/s/channel)
+	raw = strings.TrimPrefix(raw, "s/")
 	if strings.HasPrefix(raw, "joinchat/") {
 		return "+" + raw[len("joinchat/"):]
 	}

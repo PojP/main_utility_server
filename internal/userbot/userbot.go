@@ -387,16 +387,36 @@ func extractTitle(text string) string {
 	if text == "" {
 		return "(без текста)"
 	}
-	lines := strings.SplitN(text, "\n", 2)
-	title := strings.TrimSpace(lines[0])
-	runes := []rune(title)
+	// Try to find a meaningful first line (skip empty lines, emoji-only lines, short garbage)
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Strip markdown bold/italic markers for cleaner titles
+		line = strings.ReplaceAll(line, "**", "")
+		line = strings.ReplaceAll(line, "__", "")
+		line = strings.TrimSpace(line)
+		// Skip lines that are too short to be meaningful titles (likely emoji or formatting)
+		runes := []rune(line)
+		if len(runes) < 4 {
+			continue
+		}
+		if len(runes) > 100 {
+			return string(runes[:100]) + "..."
+		}
+		return line
+	}
+	// Fallback: truncate full text
+	runes := []rune(strings.TrimSpace(text))
 	if len(runes) > 100 {
 		return string(runes[:100]) + "..."
 	}
-	if title == "" {
+	if len(runes) == 0 {
 		return "(без текста)"
 	}
-	return title
+	return string(runes)
 }
 
 // termAuth implements auth.UserAuthenticator for terminal-based auth.
