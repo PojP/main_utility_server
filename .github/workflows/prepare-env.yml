@@ -48,8 +48,8 @@ jobs:
           GEMINI_MODEL=${{ secrets.GEMINI_MODEL || 'gemini-2.0-flash' }}
 
           # === Obsidian ===
-          OBSIDIAN_VAULT_HOST_PATH=${{ secrets.OBSIDIAN_VAULT_HOST_PATH || 'NOT_SET' }}
-
+          OBSIDIAN_VAULT_HOST_PATH=${{ vars.OBSIDIAN_VAULT_HOST_PATH || 'NOT_SET' }}
+            OBSIDIAN_VAULT_PATH=${{vars.OBSIDIAN_VAULT_HOST_PATH}}
           # === Qdrant ===
           QDRANT_URL=http://qdrant:6333
           EOF
