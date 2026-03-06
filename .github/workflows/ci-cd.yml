@@ -11,7 +11,8 @@ jobs:
   ci:
     name: Build & Vet
     runs-on: ubuntu-latest
-
+    environment:
+      name: .env
     steps:
       - uses: actions/checkout@v4
 
@@ -30,6 +31,8 @@ jobs:
   deploy:
     name: Deploy
     needs: ci
+    environment:
+      name: .env
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
 

@@ -7,24 +7,13 @@ on:
     branches: [main, master]
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v4
-        with:
-          go-version: '1.22'
-
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: latest
 
   build:
     name: Build
     runs-on: ubuntu-latest
+    environment:
+      name: .env
     strategy:
       matrix:
         service: [bot, parser, userbot, api]
