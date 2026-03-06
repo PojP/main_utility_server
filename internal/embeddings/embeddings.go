@@ -12,7 +12,7 @@ import (
 
 const (
 	geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta"
-	DefaultModel  = "text-embedding-004"
+	DefaultModel  = "gemini-embedding-001"
 	VectorSize    = 768
 )
 
